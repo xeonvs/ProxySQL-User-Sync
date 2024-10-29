@@ -51,7 +51,7 @@ You can set parameters via environment variables or command line arguments. Comm
 - `DB_PORT` - MySQL port (default: `3306`)
 
 
-- `APPLY_CHANGES` - Flag to apply changes to ProxySQL (default: `false`)
+- `APPLY_CHANGES` - Flag to apply changes to ProxySQL (**default: `false`**)
 
 ### Command line arguments
 
@@ -74,7 +74,13 @@ You can set parameters via environment variables or command line arguments. Comm
 
 ## Usage
 
-Run the script with the required parameters:
+Run the script with the required parameters in test mode (by default):
 
 ```bash
+python3 proxysql_user_sync.py --proxysql-admin-password='your_password' --db-password='your_db_password'
+```
+
+Apply changes:
+```bash
 python3 proxysql_user_sync.py --proxysql-admin-password='your_password' --db-password='your_db_password' --apply
+```
