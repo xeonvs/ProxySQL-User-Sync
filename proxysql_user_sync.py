@@ -1,12 +1,14 @@
 #!/bin/env python3
+"""ProxySQL users sync"""
 # -*- coding: utf-8 -*-
 import os
-import pymysql
 import argparse
 import logging
 import sys
+import pymysql
 
 # Default logging
+# pylint: disable=logging-fstring-interpolation
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -44,9 +46,11 @@ def get_users_from_db(db_nodes, db_user, db_password, db_port):
             logging.error(f"Error connecting to MySQL node {node}: {err}")
     return []
 
-
-def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user, proxysql_admin_password,
-               proxysql_default_hostgroup, db_nodes, db_user, db_password, db_port, apply_changes=False):
+# pylint: disable=(too-many-arguments,too-many-positional-arguments,too-many-locals
+def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user,
+               proxysql_admin_password, proxysql_default_hostgroup,
+               db_nodes, db_user, db_password, db_port,
+               apply_changes=False):
     """Synchronizes users from MySQL to ProxySQL."""
     users = get_users_from_db(db_nodes, db_user, db_password, db_port)
     if not users:
@@ -66,13 +70,16 @@ def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user, pr
                 cursorclass=pymysql.cursors.DictCursor
             )
             with connection.cursor() as cursor:
-                # Combine insertion of all users into one operator
+                # Combine the insertion of all users into one operator
+                # pylint: disable=logging-fstring-interpolation
                 query = "INSERT INTO mysql_users(username, password, default_hostgroup) VALUES "
                 query += ", ".join(["(%s, %s, %s)"] * len(users))
                 query += " ON CONFLICT(username,backend) DO UPDATE SET password=excluded.password"
 
                 # noinspection PyTypeChecker
-                data = [(user['user'], user['authentication_string'], proxysql_default_hostgroup) for user in users]
+                data = [(user['user'],
+                         user['authentication_string'],
+                         proxysql_default_hostgroup) for user in users]
                 flat_data = [item for sublist in data for item in sublist]
 
                 logging.info("Executing user synchronization query.")
@@ -87,6 +94,7 @@ def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user, pr
             logging.info("Users synchronized and applied to ProxySQL.")
         except pymysql.MySQLError as err:
             logging.error(f"Error updating ProxySQL: {err}")
+        # pylint: disable=broad-exception-caught
         except Exception as err:
             logging.error(f"General error during synchronization: {err}")
 
@@ -100,24 +108,32 @@ def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user, pr
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Synchronize MySQL users with ProxySQL.')
 
-    parser.add_argument('--proxysql-admin-host', default=get_env_or_default('PROXYSQL_ADMIN_HOST', 'localhost'),
+    parser.add_argument('--proxysql-admin-host',
+                        default=get_env_or_default('PROXYSQL_ADMIN_HOST', 'localhost'),
                         help='ProxySQL admin host')
-    parser.add_argument('--proxysql-admin-port', type=int, default=int(get_env_or_default('PROXYSQL_ADMIN_PORT', 6032)),
+    parser.add_argument('--proxysql-admin-port', type=int,
+                        default=int(get_env_or_default('PROXYSQL_ADMIN_PORT', 6032)),
                         help='ProxySQL admin port')
-    parser.add_argument('--proxysql-admin-user', default=get_env_or_default('PROXYSQL_ADMIN_USER', 'admin'),
+    parser.add_argument('--proxysql-admin-user',
+                        default=get_env_or_default('PROXYSQL_ADMIN_USER', 'admin'),
                         help='ProxySQL admin user')
-    parser.add_argument('--proxysql-admin-password', default=get_env_or_default('PROXYSQL_ADMIN_PASSWORD', ''),
+    parser.add_argument('--proxysql-admin-password',
+                        default=get_env_or_default('PROXYSQL_ADMIN_PASSWORD', ''),
                         help='ProxySQL admin password')
     parser.add_argument('--proxysql-default-hostgroup', type=int,
                         default=int(get_env_or_default('PROXYSQL_DEFAULT_HOSTGROUP', 0)),
                         help='ProxySQL default hostgroup')
 
     parser.add_argument('--db-nodes',
-                        default=get_env_or_default('DB_NODES', 'node1.local,node2.local,node3.local'),
+                        default=get_env_or_default('DB_NODES',
+                                                   'node1.local,node2.local,node3.local'),
                         help='Comma-separated list of DB nodes')
-    parser.add_argument('--db-user', default=get_env_or_default('DB_USER', 'monitor'), help='Database user')
-    parser.add_argument('--db-password', default=get_env_or_default('DB_PASSWORD', ''), help='Database password')
-    parser.add_argument('--db-port', type=int, default=int(get_env_or_default('DB_PORT', 3306)), help='Database port')
+    parser.add_argument('--db-user',
+                        default=get_env_or_default('DB_USER', 'monitor'), help='Database user')
+    parser.add_argument('--db-password',
+                        default=get_env_or_default('DB_PASSWORD', ''), help='Database password')
+    parser.add_argument('--db-port', type=int,
+                        default=int(get_env_or_default('DB_PORT', 3306)), help='Database port')
 
     parser.add_argument('--apply', action='store_true', help='Apply changes to ProxySQL')
 
@@ -132,7 +148,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     db_cluster = args.db_nodes.split(',')
-    p_apply_changes = args.apply or (get_env_or_default('APPLY_CHANGES', 'false').lower() in ('true', '1', 'yes'))
+    p_apply_changes = (args.apply or
+                       (get_env_or_default('APPLY_CHANGES',
+                                           'false').lower() in ('true', '1', 'yes')))
 
     sync_users(
         proxysql_admin_host=args.proxysql_admin_host,
