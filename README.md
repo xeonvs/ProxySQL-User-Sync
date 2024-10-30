@@ -12,7 +12,7 @@ ProxySQL User Sync is a Python utility for synchronizing users from a MySQL clus
 
 ## Installation
 
-### 1. Manual install the required dependencies:
+### 1. Manual install the required dependencies
    - ### by package manager
     ```bash
     sudo apt update
@@ -25,7 +25,7 @@ ProxySQL User Sync is a Python utility for synchronizing users from a MySQL clus
    pip install -r requirements.txt
    ```
 
-### 2. Clone the repository:
+### 2. Clone the repository or download [file](https://github.com/xeonvs/ProxySQL-User-Sync/raw/refs/heads/main/proxysql_user_sync.py)
 ```bash
 git clone https://github.com/xeonvs/proxysql-user-sync.git
 cd proxysql-user-sync
