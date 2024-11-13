@@ -68,7 +68,10 @@ You can set parameters via environment variables or command line arguments. Comm
 - `--db-password` - MySQL user password
 
 
-- `--apply` - Flag to apply changes to ProxySQL
+- `--apply` - Flag to apply changes to running ProxySQL (only used when neither `--proxysql-config-update` nor `--export-sql` are specified)
+- `--proxysql-config-update <FILE>` - Update ProxySQL config file directly.
+- `--export-sql <DIR>` - Export SQL commands to a file in the specified directory.
+
 
 ---
 
@@ -83,4 +86,15 @@ python3 proxysql_user_sync.py --proxysql-admin-password='your_password' --db-pas
 Apply changes:
 ```bash
 python3 proxysql_user_sync.py --proxysql-admin-password='your_password' --db-password='your_db_password' --apply
+```
+
+Update ProxySQL config directly (requires root privileges or appropriate file permissions):
+```bash
+sudo python3 proxysql_user_sync.py --proxysql-config-update /etc/proxysql.cnf --db-password='your_db_password'
+```
+
+Export SQL commands to a directory (e.g., 'output_sql'):
+```bash
+mkdir /tmp/output_sql
+python3 proxysql_user_sync.py --export-sql /tmp/output_sql --db-password='your_db_password'
 ```
