@@ -5,6 +5,7 @@ import os
 import argparse
 import logging
 import sys
+import shutil
 import pymysql
 
 # Default logging
@@ -21,7 +22,7 @@ def get_env_or_default(env_var, default_value):
     return os.getenv(env_var, default_value)
 
 
-def get_users_from_db(db_nodes, db_user, db_password, db_port) -> dict:
+def get_users_from_db(db_nodes: list, db_user: str, db_password: str, db_port: int) -> dict:
     """Gets a list of users from a MySQL cluster."""
     for node in db_nodes:
         try:
@@ -47,10 +48,10 @@ def get_users_from_db(db_nodes, db_user, db_password, db_port) -> dict:
     return {}
 
 # pylint: disable=(too-many-arguments,too-many-positional-arguments,too-many-locals
-def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user,
-               proxysql_admin_password, proxysql_default_hostgroup,
-               db_nodes, db_user, db_password, db_port,
-               apply_changes=False, export_sql=None):
+def sync_users(proxysql_admin_host: str, proxysql_admin_port: int, proxysql_admin_user: str,
+               proxysql_admin_password: str, proxysql_default_hostgroup: int,
+               db_nodes: list, db_user: str, db_password: str, db_port: int,
+               apply_changes: bool = False, export_sql: str = None, proxysql_config: str = None):
     """Synchronizes users from MySQL to ProxySQL."""
     users = get_users_from_db(db_nodes, db_user, db_password, db_port)
     if not users:
@@ -71,7 +72,49 @@ def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user,
         logging.info(f"ProxySQL users exported to {file_path}")
         return
 
-    if apply_changes:
+    if proxysql_config:
+        try:
+            # Backup the config file
+            shutil.copy2(proxysql_config, f"{proxysql_config}.bak")
+            logging.info(f"Backed up {proxysql_config} to {proxysql_config}.bak")
+
+            with open(proxysql_config, 'r', encoding='utf-8') as f:
+                config_content = f.read()
+
+            mysql_users_start = config_content.find("mysql_users:\n(")
+            mysql_users_end = config_content.find(")", mysql_users_start)
+
+            if mysql_users_start == -1 or mysql_users_end == -1:
+                raise ValueError("Could not find mysql_users section in config file")
+
+            # Extract existing config, preserving comments
+            existing_config_lines = config_content[mysql_users_start +
+                                                   len("mysql_users:\n("):mysql_users_end].splitlines()
+            preserved_comments = [line for line in existing_config_lines if line.strip().startswith('#')]
+
+            user_strings = [(f"{{ username = \"{user['user']}\", "
+                             f"password = \"{user['authentication_string']}\", "
+                             f"default_hostgroup = {proxysql_default_hostgroup}}}") for user in users]
+            users_config = ",\n".join(user_strings)
+
+            new_config_content = (
+                config_content[:mysql_users_start + len("mysql_users:\n(")] +
+                "\n".join(preserved_comments) + # Add preserved comments back
+                users_config +
+                config_content[mysql_users_end:]
+            )
+
+
+            with open(proxysql_config, 'w', encoding='utf-8') as f:
+                f.write(new_config_content)
+
+            logging.info(f"Updated {proxysql_config} with user information")
+
+        except (IOError, ValueError) as e:
+            logging.error(f"Error updating config file: {e}")
+            return
+
+    elif apply_changes:
         try:
             logging.info("Connecting to ProxySQL for user synchronization.")
             # noinspection PyUnresolvedReferences
@@ -150,6 +193,8 @@ if __name__ == '__main__':
                         default=int(get_env_or_default('DB_PORT', 3306)), help='Database port')
 
     parser.add_argument('--apply', action='store_true', help='Apply changes to ProxySQL')
+    parser.add_argument('--proxysql-config-update', metavar='FILE',
+                        help='Path to ProxySQL config file to update')
     parser.add_argument('--export-sql', metavar='DIR',
                         help='Export SQL commands to a file in DIR')
 
@@ -181,4 +226,5 @@ if __name__ == '__main__':
         db_port=args.db_port,
         apply_changes=p_apply_changes,
         export_sql=args.export_sql,
+        proxysql_config=args.proxysql_config_update,
     )
