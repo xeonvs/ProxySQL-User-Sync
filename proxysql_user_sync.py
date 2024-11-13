@@ -21,7 +21,7 @@ def get_env_or_default(env_var, default_value):
     return os.getenv(env_var, default_value)
 
 
-def get_users_from_db(db_nodes, db_user, db_password, db_port):
+def get_users_from_db(db_nodes, db_user, db_password, db_port) -> dict:
     """Gets a list of users from a MySQL cluster."""
     for node in db_nodes:
         try:
@@ -44,17 +44,31 @@ def get_users_from_db(db_nodes, db_user, db_password, db_port):
             return users
         except pymysql.MySQLError as err:
             logging.error(f"Error connecting to MySQL node {node}: {err}")
-    return []
+    return {}
 
 # pylint: disable=(too-many-arguments,too-many-positional-arguments,too-many-locals
 def sync_users(proxysql_admin_host, proxysql_admin_port, proxysql_admin_user,
                proxysql_admin_password, proxysql_default_hostgroup,
                db_nodes, db_user, db_password, db_port,
-               apply_changes=False):
+               apply_changes=False, export_sql=None):
     """Synchronizes users from MySQL to ProxySQL."""
     users = get_users_from_db(db_nodes, db_user, db_password, db_port)
     if not users:
         logging.warning("No users to synchronize.")
+        return
+
+    if export_sql is not None:
+        export_dir = export_sql
+        file_path = os.path.join(export_dir, 'proxysql_users.sql')
+        with open(file_path, 'w', encoding='utf-8') as sql_file:
+            for user in users:
+                sql = (f"INSERT INTO mysql_users(username, password, default_hostgroup) "
+                       f"VALUES ('{user['user']}', '{user['authentication_string']}', "
+                       f"{proxysql_default_hostgroup}) "
+                       f"ON CONFLICT(username,backend) DO UPDATE SET password=excluded.password;\n")
+                sql_file.write(sql)
+            sql_file.write("LOAD MYSQL USERS TO RUNTIME;\nSAVE MYSQL USERS TO DISK;")
+        logging.info(f"ProxySQL users exported to {file_path}")
         return
 
     if apply_changes:
@@ -136,16 +150,19 @@ if __name__ == '__main__':
                         default=int(get_env_or_default('DB_PORT', 3306)), help='Database port')
 
     parser.add_argument('--apply', action='store_true', help='Apply changes to ProxySQL')
+    parser.add_argument('--export-sql', metavar='DIR',
+                        help='Export SQL commands to a file in DIR')
 
     args = parser.parse_args()
 
-    # Check for mandatory parameters
-    if not args.proxysql_admin_password:
-        logging.error("ProxySQL admin password must be set.")
-        sys.exit(1)
-    if not args.db_password:
-        logging.error("Database password must be set.")
-        sys.exit(1)
+    # Check for mandatory parameters. Only required if not exporting to SQL.
+    if args.export_sql is None:
+        if not args.proxysql_admin_password:
+            logging.error("ProxySQL admin password must be set.")
+            sys.exit(1)
+        if not args.db_password:
+            logging.error("Database password must be set.")
+            sys.exit(1)
 
     db_cluster = args.db_nodes.split(',')
     p_apply_changes = (args.apply or
@@ -162,5 +179,6 @@ if __name__ == '__main__':
         db_user=args.db_user,
         db_password=args.db_password,
         db_port=args.db_port,
-        apply_changes=p_apply_changes
+        apply_changes=p_apply_changes,
+        export_sql=args.export_sql,
     )
