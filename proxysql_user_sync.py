@@ -98,9 +98,9 @@ def sync_users(proxysql_admin_host: str, proxysql_admin_port: int, proxysql_admi
             users_config = ",\n".join(user_strings)
 
             new_config_content = (
-                config_content[:mysql_users_start + len("mysql_users:\n(")] +
-                "\n".join(preserved_comments) + # Add preserved comments back
-                users_config +
+                config_content[:mysql_users_start + len("mysql_users:\n(")] + "\n" +
+                "\n".join(preserved_comments) + "\n" + # Add preserved comments back
+                users_config + "\n" +
                 config_content[mysql_users_end:]
             )
 
@@ -186,22 +186,24 @@ if __name__ == '__main__':
                                                    'node1.local,node2.local,node3.local'),
                         help='Comma-separated list of DB nodes')
     parser.add_argument('--db-user',
-                        default=get_env_or_default('DB_USER', 'monitor'), help='Database user')
+                        default=get_env_or_default('DB_USER', 'monitor'),
+                        help='User with SELECT privilege to read mysql.user table')
     parser.add_argument('--db-password',
-                        default=get_env_or_default('DB_PASSWORD', ''), help='Database password')
+                        default=get_env_or_default('DB_PASSWORD', ''), help='User\'s password')
     parser.add_argument('--db-port', type=int,
-                        default=int(get_env_or_default('DB_PORT', 3306)), help='Database port')
+                        default=int(get_env_or_default('DB_PORT', 3306)), help='MySQL port')
 
-    parser.add_argument('--apply', action='store_true', help='Apply changes to ProxySQL')
+    parser.add_argument('--apply', action='store_true', help='Apply changes to running ProxySQL')
     parser.add_argument('--proxysql-config-update', metavar='FILE',
-                        help='Path to ProxySQL config file to update')
+                        help='Path to ProxySQL config file to update. '
+                             'For default installation use this path: /etc/proxysql.cnf')
     parser.add_argument('--export-sql', metavar='DIR',
                         help='Export SQL commands to a file in DIR')
 
     args = parser.parse_args()
 
     # Check for mandatory parameters. Only required if not exporting to SQL.
-    if args.export_sql is None:
+    if args.export_sql is None and args.proxysql_config_update is None:
         if not args.proxysql_admin_password:
             logging.error("ProxySQL admin password must be set.")
             sys.exit(1)
